@@ -234,6 +234,27 @@ TEST_CASE( "StepperDecoder ignores energized blips shorter than the minimum" )
     CHECK( out[ 1 ].position == doctest::Approx( 0 ) ); // the blip did not become the zero reference
 }
 
+TEST_CASE( "StepperDecoder takes the zero reference after the drive settles" )
+{
+    DecoderConfig config;
+    config.zero_settle_samples = 300;
+    StepperDecoder decoder( config );
+    std::vector<Segment> out;
+    double duty[ TERMINAL_COUNT ];
+
+    // Power-up: one window of ramping current at a slightly different angle, then the hold.
+    DutiesFor( -104.6, 0.14, duty );
+    decoder.AddWindow( 0, 100, duty, out );
+    DutiesFor( -112.3, 0.38, duty );
+    for( uint64_t t = 100; t < 1000; t += 100 )
+        decoder.AddWindow( t, t + 100, duty, out );
+    decoder.Flush( out );
+
+    REQUIRE( out.size() == 2 );
+    CHECK( out[ 1 ].position == doctest::Approx( 0 ) );
+    CHECK( out[ 1 ].start == 100 );
+}
+
 TEST_CASE( "Pipeline decodes the synthetic program to the commanded positions" )
 {
     struct Case

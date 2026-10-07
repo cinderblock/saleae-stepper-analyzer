@@ -25,6 +25,7 @@ namespace stepper
         bool invert = false;                // report positive positions for the opposite rotation
         bool start_at_zero = true;          // position 0 is where the motor was first energized
         uint64_t min_energized_samples = 0; // shorter energized spans after an off span are ignored as glitches
+        uint64_t zero_settle_samples = 0;   // with start_at_zero, zero is the position after this much continuous drive
     };
 
     enum class SegmentType
@@ -98,6 +99,7 @@ namespace stepper
         double mPreviousAngle = 0; // degrees
         double mUnwrapped = 0;     // electrical position in full steps, continuous
         double mOffset = 0;        // added to mUnwrapped to get the reported position
+        bool mOffsetChosen = false;
         uint64_t mLastEnd = 0;
 
         std::vector<Window> mPending; // energized windows waiting to last min_energized_samples

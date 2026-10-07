@@ -25,6 +25,7 @@ namespace stepper
         int periods_per_window = 2;       // PWM periods averaged per window
         double minimum_window = 5e-6;     // seconds; the window when no PWM is known
         double minimum_energized = 20e-6; // seconds; shorter energized blips (switching skew) count as off
+        double zero_settle = 1e-3;        // seconds of drive before the start-at-zero reference is taken
         double max_pwm_period = 250e-6;   // seconds; slower repetition is treated as stepping, not PWM
         double lookahead = 2e-3;          // seconds of data read ahead of the decoding point
         double estimator_history = 3e-3;  // seconds of past edges the PWM estimator remembers

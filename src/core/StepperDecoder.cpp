@@ -1,5 +1,6 @@
 #include "StepperDecoder.h"
 
+#include <algorithm>
 #include <cmath>
 
 namespace stepper
@@ -41,12 +42,19 @@ namespace stepper
 
         if( window.drive < mConfig.energized_threshold )
         {
-            // Energized windows that did not last long enough were switching glitches: they become
-            // part of the de-energized span.
-            for( const Window& pending : mPending )
-                AddOff( pending, out );
-            mPending.clear();
-            mPendingSamples = 0;
+            if( mPendingSamples >= mConfig.min_energized_samples )
+            {
+                FlushPending( out );
+            }
+            else
+            {
+                // Energized windows that did not last long enough were switching glitches: they
+                // become part of the de-energized span.
+                for( const Window& pending : mPending )
+                    AddOff( pending, out );
+                mPending.clear();
+                mPendingSamples = 0;
+            }
             AddOff( window, out );
             return;
         }
@@ -58,15 +66,35 @@ namespace stepper
         }
 
         // Coming out of de-energized: hold the windows back until the drive has lasted long enough
-        // to be real.
+        // to be real. The very first time, also wait for the drive to settle before choosing the
+        // zero reference.
+        uint64_t needed = mConfig.min_energized_samples;
+        if( !mEverEnergized && mConfig.start_at_zero )
+            needed = std::max( needed, mConfig.zero_settle_samples );
+
         mPending.push_back( window );
         mPendingSamples += end - start;
-        if( mPendingSamples >= mConfig.min_energized_samples )
+        if( mPendingSamples >= needed )
             FlushPending( out );
     }
 
     void StepperDecoder::FlushPending( std::vector<Segment>& out )
     {
+        if( !mEverEnergized && mConfig.start_at_zero && !mPending.empty() )
+        {
+            // Zero is where the motor sits once the drive has settled: the last held-back window.
+            double previous = AngleDegrees( mPending.front().a, mPending.front().b );
+            double unwrapped = previous / 90.0;
+            for( const Window& pending : mPending )
+            {
+                const double angle = AngleDegrees( pending.a, pending.b );
+                unwrapped += Wrap180( angle - previous ) / 90.0;
+                previous = angle;
+            }
+            mOffset = -unwrapped;
+            mOffsetChosen = true;
+        }
+
         for( const Window& pending : mPending )
             AddEnergized( pending, out );
         mPending.clear();
@@ -99,7 +127,8 @@ namespace stepper
         if( !mEverEnergized )
         {
             mUnwrapped = angle / 90.0;
-            mOffset = mConfig.start_at_zero ? -mUnwrapped : 0;
+            if( !mOffsetChosen )
+                mOffset = mConfig.start_at_zero ? -mUnwrapped : 0;
             mEverEnergized = true;
         }
         else if( !mHaveAngle )

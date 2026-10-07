@@ -19,6 +19,7 @@ namespace stepper
         {
             DecoderConfig decoder = config.decoder;
             decoder.min_energized_samples = uint64_t( std::llround( config.minimum_energized * config.sample_rate ) );
+            decoder.zero_settle_samples = uint64_t( std::llround( config.zero_settle * config.sample_rate ) );
             return decoder;
         }
     }
