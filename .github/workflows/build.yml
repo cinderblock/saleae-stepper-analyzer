@@ -17,6 +17,8 @@ jobs:
       run: |
         cmake -B ${{github.workspace}}/build -A x64
         cmake --build ${{github.workspace}}/build --config Release
+    - name: Test
+      run: ctest --test-dir ${{github.workspace}}/build -C Release --output-on-failure
     - name: Upload windows x86_64 build
       uses: actions/upload-artifact@v4
       with:
@@ -67,7 +69,7 @@ jobs:
           -v ${{ github.workspace }}:/app \
           -w /app \
           ghcr.io/saleae/analyzer-build-image:linux-x86_64 \
-          bash -c 'cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build'
+          bash -c 'cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build && ctest --test-dir build --output-on-failure'
     - name: Upload Linux x86_64 build
       uses: actions/upload-artifact@v4
       with:
