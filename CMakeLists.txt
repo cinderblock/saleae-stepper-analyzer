@@ -70,6 +70,20 @@ if(STEPPER_BUILD_TESTS)
     target_link_libraries(stepper_core_tests PRIVATE stepper_core)
     add_test(NAME stepper_core_tests COMMAND stepper_core_tests)
 
+    # Runs the simulation data generator against the real Analyzer SDK library. The Linux SDK
+    # library is built against libc++, so linking an executable to it with GCC's libstdc++ fails;
+    # the analyzer module is only resolved against it when Logic loads it.
+    if(WIN32 OR APPLE)
+        add_executable(stepper_simulation_tests
+            tests/simulation_tests.cpp
+            src/StepperMotorCoilsAnalyzerSettings.cpp
+            src/StepperMotorCoilsSimulationDataGenerator.cpp
+        )
+        target_include_directories(stepper_simulation_tests PRIVATE src ${doctest_SOURCE_DIR})
+        target_link_libraries(stepper_simulation_tests PRIVATE stepper_core Saleae::AnalyzerSDK)
+        add_test(NAME stepper_simulation_tests COMMAND stepper_simulation_tests)
+    endif()
+
     # Replays a Logic 2 digital CSV export through the decoder.
     add_executable(stepper_replay tools/replay_csv.cpp)
     target_link_libraries(stepper_replay PRIVATE stepper_core)

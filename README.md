@@ -107,6 +107,7 @@ ctest --test-dir build
   - `MoveGrouper`: the *Moves and holds* grouping;
   - `StepperWaveform`: a synthetic test program, also used by Logic's demo device.
 - **`tests/core_tests.cpp`:** doctest unit tests. These include decoding the synthetic program at several sample rates and PWM frequencies.
+- **`tests/simulation_tests.cpp`:** runs the simulation data generator against the real Analyzer SDK library, the way Logic's demo device calls it. Logic only plays an analyzer's simulation when the analyzer was added in the UI before capturing, so the automation API can't test it.
 - **`tools/replay_csv.cpp`:** replays a Logic digital CSV export (*File → Export Data → CSV*) through the decoder:
 
   ```sh

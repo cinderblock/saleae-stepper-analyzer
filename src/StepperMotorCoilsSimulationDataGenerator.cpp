@@ -49,6 +49,14 @@ U32 StepperMotorCoilsSimulationDataGenerator::GenerateSimulationData( U64 larges
                 channel->Advance( U32( transition.sample - current ) );
             channel->Transition();
         }
+
+        // Every channel must reach the end of the generated span, including ones that did not change.
+        for( SimulationChannelDescriptor* channel : mChannels )
+        {
+            const U64 current = channel->GetCurrentSampleNumber();
+            if( mGenerated > current )
+                channel->Advance( U32( mGenerated - current ) );
+        }
     }
 
     *simulation_channels = mGroup.GetArray();
