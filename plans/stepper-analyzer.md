@@ -59,24 +59,27 @@ Frames are **intervals of constant quantized position**: a frame spans the time 
 | --- | --- |
 | `position` | Energized interval at a constant quantized position |
 | `off` | De-energized (drive < threshold) |
-| `error` | Ambiguous jump |
+| `ambiguous` | Ambiguous jump (shown as an error) |
+| `move` | *Moves and holds* mode only: a run of position spans shorter than the hold time, from the held position before to the one after |
 
-`position` frames carry these FrameV2 fields:
+FrameV2 fields as implemented (see the README for the full table):
 
 | Field | Content |
 | --- | --- |
-| `position` | Full steps (double) |
-| `position_units` | Position in the selected unit |
-| `angle` | Electrical degrees |
+| `position` | Position as a string, in the display unit |
+| `steps` | Full steps (double) |
+| `electrical_angle` | Degrees (not on moves) |
 | `drive` | Percent |
 | `direction` | Direction of the change that ended the interval |
-| `rate` | Steps/s, computed as resolution / duration |
+| `rate` | delta / duration in steps/s (for a move, its mean speed) |
+| `from`, `delta` | Moves only |
 
 ### Settings
 
 - Channels: A+, A−, B+, B−.
-- PWM period in ns (0 = auto).
+- PWM filtering: Auto-detect / Fixed frequency (Hz) / None.
 - Periods per window (default 2).
+- Results: Every position change / Moves and holds; hold time in ms (default 20).
 - Resolution: full step down to 1/256 (default 1/16).
 - Energized threshold in % (default 10).
 - Units (full steps / degrees / revolutions) and steps per rev (default 200).
@@ -99,7 +102,22 @@ Frames are **intervals of constant quantized position**: a frame spans the time 
 
 ## Findings / gotchas
 
+- **The tool host sets `ELECTRON_RUN_AS_NODE=1`.** With it, `Logic.exe` runs as plain Node and exits with code 9 ("invalid argument"). Unset it before launching Logic.
+- **Logic 2 honors `--user-data-dir`** and has no single-instance lock, so a second, isolated instance works. Combine it with:
+  - `SALEAE_DISABLE_DEVICE_SCAN=1`, so the test instance never claims the Pro 16;
+  - `--automation --automationPort 10431`.
+- **Logic CLI flags** (from `dist/main.js`): `--loadFile`, `--automation`, `--automationHost`, `--automationPort`, `--mcp`, `--mcpPort`.
+- **Captures loaded through the automation API are headless.** They don't appear in the UI. To see bubbles, `save_capture` with the analyzer added, then open the file with `--loadFile`.
+- **Driver behavior in the sample capture:** at full-step transitions the driver chops coil A at about 26 kHz for ~0.4 ms while its current reverses. Averaging shows it as a smooth sweep through the intermediate angle.
+- **Power-up blip:** a ~5 µs staggered switch at power-up (0000→0010→1010→1110→1111 into brake) was taken as the first energized position. That is why the glitch filter exists.
+
 - Quick duty estimates that only count edge rows inside a window are wrong when a state outlives the window: long full-step holds read as "off". Always integrate high time across window edges.
+- **Dense frames mislabel at mid-zoom.** When frames are too narrow to label, Logic packs their bubble labels side by side rather than at each frame's time. A 0.8 s, 142-step move at 0.9 s zoom showed "−2.75" where the motor was near −100. That is why *Moves and holds* exists.
+- **Simulation glue:** each `SimulationChannelDescriptor` must be advanced to the requested sample even with no transition. This was fixed in `323e25a`, found by `tests/simulation_tests.cpp`.
+- **The demo device ignores analyzers added after capture.** Automation and MCP captures on simulation devices (`F4241` = Pro 16 demo) play generic random data, because analyzers can only be added after the capture starts. So the simulation is tested against the SDK library directly.
+- **The Linux SDK `libAnalyzer.so` is built against libc++.** Linking an executable to it with GCC/libstdc++ fails with undefined `std::__1::…` symbols. The simulation test is therefore Windows/macOS only. The plugin `.so` and core tests build fine with GCC (checked in WSL with CMake 3.30.5 and Ninja downloaded to `/tmp`).
+- **The Logic MCP server** (`--mcp --mcpPort N`, Streamable HTTP) exposes the same operations as the automation API. Nothing extra for analyzers.
+- **Performance:** the analyzer takes about 8 s for the 37 s, 4-channel, 17 kHz-PWM capture (about 4.5× real time). Loading the 233 MB `.sal` in Logic takes about 49 s.
 - `Session 0.sal` uses meta.json **version 22**. Device settings live under `legacyDevice` / `legacySettings`, and `binData` entries carry a `dataId`.
 
 ## Progress log
@@ -107,16 +125,26 @@ Frames are **intervals of constant quantized position**: a frame spans the time 
 - [x] Prior-art check: unique. sigrok `stepper_motor` is STEP/DIR only.
 - [x] User answers: either signal type; maybe chopping; STEP/DIR separate; sample capture provided.
 - [x] Analyzed the sample capture and validated the algorithm in Python.
-- [ ] **Current step:** scaffold the repo from SampleAnalyzer and build an empty analyzer with MSVC.
-- [ ] `StepperDecoder` + `StepperWaveform` + unit tests.
-- [ ] Analyzer glue, settings, results, simulation generator.
-- [ ] Replay `digital.csv` through the C++ decoder and compare against the Python reference.
-- [ ] Load in a separate Logic 2 instance via automation and verify on `Session 0.sal`.
-- [ ] README, CI workflow, first commit(s).
+- [x] Scaffolded from SampleAnalyzer. MSVC + Ninja build via `build.ps1`.
+- [x] `StepperDecoder`, `PwmEstimator`, `EdgeQueue`, `StepperPipeline`, `StepperWaveform`, plus doctest unit tests: 9 cases, 5217 assertions. Synthetic program checked at 1 / 4 / 6.25 / 50 MHz.
+- [x] Analyzer glue, settings, results, simulation generator (`ec98c7c`).
+- [x] Replayed `digital.csv` through the C++ decoder. It matches the Python reference: 0 → −142.25 → −142.5 with start-at-zero.
+- [x] Glitch filter: energized spans < 20 µs after an off span count as off. This removed a false "ambiguous" at power-up.
+- [x] Zero reference taken after 1 ms of settled drive (`3cde3aa`).
+- [x] Loaded in an isolated Logic 2.4.46 instance via automation (`tools/logic-test-instance.ps1`, `66248ec`). Decodes `Session 0.sal` into 740 frames; the data table and legacy export both work.
+- [x] Visual check in the Logic UI. Bubbles render, including the full "Position −142.5 steps (22.3° electrical, drive 38%)" text, UTF-8 degree sign and arrow.
+- [x] *Moves and holds* result mode + `MoveGrouper` (`a57869a`). The UI shows "Move 0 → −142.25 steps (−142.25 steps in 0.8 s, −177.9 steps/s)".
+- [x] README, and CI runs the tests (`83ef0e2`).
+- [x] Simulation generator fixed and tested against the SDK library (`323e25a`).
+- [x] Final DLL re-verified in an isolated Logic on `Session 0.sal` (both modes); test instance stopped.
+- [ ] Publish: no GitHub remote yet (needs the user's go-ahead).
+- [ ] Optional manual check: demo device in the Logic UI. Add the analyzer before capturing so Logic plays its simulation.
+- [ ] Install into the user's everyday Logic: add `build/release/Analyzers` (or a copy) to *Custom Low Level Analyzers*, which needs a Logic restart. The user's call.
 
 ## Open questions for the user
 
-None currently.
+1. Publish to GitHub (for example `cinderblock/saleae-stepper-analyzer`, public) and let CI build all platforms? Recommended.
+2. Should I add the analyzer to your everyday Logic's custom analyzer path? That needs your Logic restarted, so it's your call when.
 
 ## Things not to do
 
