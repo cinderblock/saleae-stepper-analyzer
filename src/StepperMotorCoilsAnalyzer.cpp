@@ -140,7 +140,9 @@ void StepperMotorCoilsAnalyzer::EmitSegment( const stepper::Segment& segment )
         mResults->FormatPosition( segment.position, true, position, sizeof( position ) );
         frame_v2.AddString( "position", position );
         frame_v2.AddDouble( "steps", segment.position );
-        frame_v2.AddDouble( "electrical_angle", segment.angle_degrees );
+        // A move spans many angles, so it has none of its own.
+        if( segment.type != stepper::SegmentType::Move )
+            frame_v2.AddDouble( "electrical_angle", segment.angle_degrees );
     }
     frame_v2.AddDouble( "drive", std::round( segment.drive * 1000.0 ) / 10.0 );
     if( segment.type == stepper::SegmentType::Move )
