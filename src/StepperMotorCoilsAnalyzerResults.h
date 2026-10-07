@@ -11,7 +11,8 @@ class StepperMotorCoilsAnalyzerSettings;
 // Frame encoding (FrameV2 carries the same data as named fields for the data table and HLAs):
 //   mType   stepper::SegmentType
 //   mData1  position in full steps, the bits of a double
-//   mData2  high 32 bits: electrical angle in degrees, low 32 bits: drive magnitude; each the bits of a float
+//   mData2  high 32 bits: electrical angle in degrees (for a move: its start position in full steps),
+//           low 32 bits: drive magnitude; each the bits of a float
 //   mFlags  FRAME_FLAG_POSITIVE / FRAME_FLAG_NEGATIVE for the change that ended the frame
 #define FRAME_FLAG_POSITIVE ( 1 << 0 )
 #define FRAME_FLAG_NEGATIVE ( 1 << 1 )
@@ -40,7 +41,7 @@ class StepperMotorCoilsAnalyzerResults : public AnalyzerResults
     {
         stepper::SegmentType type;
         double position;
-        double angle;
+        double angle; // for a move: where it started, in full steps
         double drive;
         int direction;
     };

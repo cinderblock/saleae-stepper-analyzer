@@ -2,6 +2,7 @@
 #include <doctest/doctest.h>
 
 #include "EdgeQueue.h"
+#include "MoveGrouper.h"
 #include "PwmEstimator.h"
 #include "StepperDecoder.h"
 #include "StepperPipeline.h"
@@ -253,6 +254,62 @@ TEST_CASE( "StepperDecoder takes the zero reference after the drive settles" )
     REQUIRE( out.size() == 2 );
     CHECK( out[ 1 ].position == doctest::Approx( 0 ) );
     CHECK( out[ 1 ].start == 100 );
+}
+
+TEST_CASE( "MoveGrouper groups quick position changes into moves between holds" )
+{
+    auto position = []( uint64_t start, uint64_t end, double steps )
+    {
+        Segment segment;
+        segment.type = SegmentType::Position;
+        segment.start = start;
+        segment.end = end;
+        segment.position = steps;
+        segment.drive = 1;
+        return segment;
+    };
+
+    MoveGrouper grouper( 1000 );
+    std::vector<Segment> out;
+
+    grouper.Add( position( 0, 5000, 0 ), out );        // hold
+    grouper.Add( position( 5000, 5100, -0.25 ), out ); // move...
+    grouper.Add( position( 5100, 5200, -0.5 ), out );
+    grouper.Add( position( 5200, 5300, -0.75 ), out );
+    grouper.Add( position( 5300, 9000, -1 ), out );    // ...arrives at a hold
+    grouper.Add( position( 9000, 9100, -0.75 ), out ); // move that ends de-energized
+    Segment off;
+    off.type = SegmentType::Off;
+    off.start = 9100;
+    off.end = 20000;
+    grouper.Add( off, out );
+    grouper.Add( position( 20000, 20100, 3 ), out ); // trailing move with no hold after it
+    grouper.Flush( out );
+
+    REQUIRE( out.size() == 6 );
+    CHECK( out[ 0 ].type == SegmentType::Position );
+
+    CHECK( out[ 1 ].type == SegmentType::Move );
+    CHECK( out[ 1 ].start == 5000 );
+    CHECK( out[ 1 ].end == 5300 );
+    CHECK( out[ 1 ].from_position == doctest::Approx( 0 ) );
+    CHECK( out[ 1 ].position == doctest::Approx( -1 ) ); // where it arrived, not its last short span
+    CHECK( out[ 1 ].delta == doctest::Approx( -1 ) );
+    CHECK( out[ 1 ].direction == -1 );
+
+    CHECK( out[ 2 ].type == SegmentType::Position );
+    CHECK( out[ 2 ].position == doctest::Approx( -1 ) );
+
+    CHECK( out[ 3 ].type == SegmentType::Move );
+    CHECK( out[ 3 ].from_position == doctest::Approx( -1 ) );
+    CHECK( out[ 3 ].position == doctest::Approx( -0.75 ) );
+
+    CHECK( out[ 4 ].type == SegmentType::Off );
+
+    // A lone short span with nothing held before it is not a move.
+    CHECK( out[ 5 ].type == SegmentType::Position );
+    CHECK( out[ 5 ].position == doctest::Approx( 3 ) );
+    CHECK( out[ 5 ].end == 20100 );
 }
 
 TEST_CASE( "Pipeline decodes the synthetic program to the commanded positions" )

@@ -21,6 +21,8 @@ set(CMAKE_CXX_STANDARD 17)
 add_library(stepper_core STATIC
 src/core/EdgeQueue.cpp
 src/core/EdgeQueue.h
+src/core/MoveGrouper.cpp
+src/core/MoveGrouper.h
 src/core/PwmEstimator.cpp
 src/core/PwmEstimator.h
 src/core/StepperDecoder.cpp

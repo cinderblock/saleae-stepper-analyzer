@@ -3,12 +3,14 @@
 // loading it into Logic.
 //
 //   stepper_replay <digital.csv> --rate <Hz> [--columns A+,A-,B+,B-] [--pwm auto|none|<Hz>]
-//                  [--resolution <denominator>] [--absolute] [--min-ms <ms>]
+//                  [--resolution <denominator>] [--absolute] [--min-ms <ms>] [--group-ms <ms>]
 //
 // --columns picks the CSV data columns (0-based, after the time column) for A+, A-, B+, B-.
 // --min-ms hides segments shorter than the given duration in the listing (the summary still
-// counts everything).
+// counts everything). --group-ms groups quick successive positions into moves, as the
+// analyzer's "Moves and holds" results do, with the given hold time.
 
+#include "MoveGrouper.h"
 #include "StepperPipeline.h"
 
 #include <cmath>
@@ -34,6 +36,8 @@ namespace
             return "off";
         case SegmentType::Ambiguous:
             return "ambiguous";
+        case SegmentType::Move:
+            return "move";
         }
         return "?";
     }
@@ -41,7 +45,7 @@ namespace
     int Usage()
     {
         std::cerr << "usage: stepper_replay <digital.csv> --rate <Hz> [--columns 0,1,2,3] [--pwm auto|none|<Hz>]"
-                     " [--resolution 16] [--absolute] [--min-ms 0]\n";
+                     " [--resolution 16] [--absolute] [--min-ms 0] [--group-ms 20]\n";
         return 2;
     }
 }
@@ -56,6 +60,7 @@ int main( int argc, char** argv )
     int columns[ TERMINAL_COUNT ] = { 0, 1, 2, 3 };
     PipelineConfig config;
     double min_ms = 0;
+    double group_ms = 0;
 
     for( int i = 2; i < argc; ++i )
     {
@@ -89,6 +94,8 @@ int main( int argc, char** argv )
             config.decoder.start_at_zero = false;
         else if( arg == "--min-ms" )
             min_ms = std::atof( next().c_str() );
+        else if( arg == "--group-ms" )
+            group_ms = std::atof( next().c_str() );
         else
             return Usage();
     }
@@ -154,8 +161,18 @@ int main( int argc, char** argv )
     pipeline.SetFilled( last_sample + 1 );
     pipeline.Finish( segments );
 
-    size_t counts[ 3 ] = {};
-    std::printf( "start_s,end_s,type,position_steps,mean_steps,angle_deg,drive,direction\n" );
+    if( group_ms > 0 )
+    {
+        MoveGrouper grouper( uint64_t( group_ms * 1e-3 * rate ) );
+        std::vector<Segment> grouped;
+        for( const Segment& segment : segments )
+            grouper.Add( segment, grouped );
+        grouper.Flush( grouped );
+        segments.swap( grouped );
+    }
+
+    size_t counts[ 4 ] = {};
+    std::printf( "start_s,end_s,type,position_steps,from_steps,mean_steps,angle_deg,drive,direction\n" );
     for( const Segment& segment : segments )
     {
         counts[ int( segment.type ) ]++;
@@ -163,22 +180,22 @@ int main( int argc, char** argv )
         const double end = t0 + double( segment.end ) / rate;
         if( ( end - start ) * 1000.0 < min_ms && segment.type != SegmentType::Ambiguous )
             continue;
-        std::printf( "%.7f,%.7f,%s,%.4f,%.4f,%.1f,%.3f,%d\n", start, end, TypeName( segment.type ), segment.position, segment.mean_position,
-                     segment.angle_degrees, segment.drive, segment.direction );
+        std::printf( "%.7f,%.7f,%s,%.4f,%.4f,%.4f,%.1f,%.3f,%d\n", start, end, TypeName( segment.type ), segment.position,
+                     segment.from_position, segment.mean_position, segment.angle_degrees, segment.drive, segment.direction );
     }
 
     double final_position = 0;
     for( auto it = segments.rbegin(); it != segments.rend(); ++it )
     {
-        if( it->type == SegmentType::Position )
+        if( it->type == SegmentType::Position || it->type == SegmentType::Move )
         {
             final_position = it->position;
             break;
         }
     }
 
-    std::fprintf( stderr, "segments: %zu position, %zu off, %zu ambiguous; final position %.4f full steps\n",
-                  counts[ int( SegmentType::Position ) ], counts[ int( SegmentType::Off ) ], counts[ int( SegmentType::Ambiguous ) ],
-                  final_position );
+    std::fprintf( stderr, "segments: %zu position, %zu move, %zu off, %zu ambiguous; final position %.4f full steps\n",
+                  counts[ int( SegmentType::Position ) ], counts[ int( SegmentType::Move ) ], counts[ int( SegmentType::Off ) ],
+                  counts[ int( SegmentType::Ambiguous ) ], final_position );
     return 0;
 }

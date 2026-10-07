@@ -20,6 +20,8 @@ StepperMotorCoilsAnalyzerSettings::StepperMotorCoilsAnalyzerSettings()
     : mPwmMode( U32( stepper::PwmMode::Auto ) ),
       mPwmFrequency( 20000 ),
       mPeriodsPerWindow( 2 ),
+      mResultMode( U32( ResultMode::EveryChange ) ),
+      mHoldTime( 20 ),
       mResolution( 16 ),
       mEnergizedThreshold( 10 ),
       mUnits( U32( PositionUnits::FullSteps ) ),
@@ -58,6 +60,22 @@ StepperMotorCoilsAnalyzerSettings::StepperMotorCoilsAnalyzerSettings()
     mPeriodsPerWindowInterface->SetMin( 1 );
     mPeriodsPerWindowInterface->SetMax( 1000 );
     AddInterface( mPeriodsPerWindowInterface.get() );
+
+    mResultModeInterface.reset( new AnalyzerSettingInterfaceNumberList() );
+    mResultModeInterface->SetTitleAndTooltip( "Results",
+                                              "One result per position change, or whole moves between holds (reads better zoomed out)" );
+    mResultModeInterface->AddNumber( double( ResultMode::EveryChange ), "Every position change",
+                                     "A result each time the position changes" );
+    mResultModeInterface->AddNumber( double( ResultMode::MovesAndHolds ), "Moves and holds",
+                                     "Quick successive changes become one move result, from start to end position" );
+    AddInterface( mResultModeInterface.get() );
+
+    mHoldTimeInterface.reset( new AnalyzerSettingInterfaceInteger() );
+    mHoldTimeInterface->SetTitleAndTooltip( "Hold time (ms)",
+                                            "With moves and holds: a position held at least this long ends a move and is shown as a hold" );
+    mHoldTimeInterface->SetMin( 1 );
+    mHoldTimeInterface->SetMax( 1000000 );
+    AddInterface( mHoldTimeInterface.get() );
 
     mResolutionInterface.reset( new AnalyzerSettingInterfaceNumberList() );
     mResolutionInterface->SetTitleAndTooltip( "Position resolution", "Smallest position change that starts a new result" );
@@ -150,6 +168,8 @@ bool StepperMotorCoilsAnalyzerSettings::SetSettingsFromInterfaces()
     mPwmMode = U32( mPwmModeInterface->GetNumber() );
     mPwmFrequency = U32( mPwmFrequencyInterface->GetInteger() );
     mPeriodsPerWindow = U32( mPeriodsPerWindowInterface->GetInteger() );
+    mResultMode = U32( mResultModeInterface->GetNumber() );
+    mHoldTime = U32( mHoldTimeInterface->GetInteger() );
     mResolution = U32( mResolutionInterface->GetNumber() );
     mEnergizedThreshold = U32( mEnergizedThresholdInterface->GetInteger() );
     mUnits = U32( mUnitsInterface->GetNumber() );
@@ -169,6 +189,8 @@ void StepperMotorCoilsAnalyzerSettings::UpdateInterfacesFromSettings()
     mPwmModeInterface->SetNumber( mPwmMode );
     mPwmFrequencyInterface->SetInteger( mPwmFrequency );
     mPeriodsPerWindowInterface->SetInteger( mPeriodsPerWindow );
+    mResultModeInterface->SetNumber( mResultMode );
+    mHoldTimeInterface->SetInteger( mHoldTime );
     mResolutionInterface->SetNumber( mResolution );
     mEnergizedThresholdInterface->SetInteger( mEnergizedThreshold );
     mUnitsInterface->SetNumber( mUnits );
@@ -195,6 +217,8 @@ void StepperMotorCoilsAnalyzerSettings::LoadSettings( const char* settings )
     text_archive >> mInvert;
     text_archive >> mStartAtZero;
     text_archive >> mStepMarkers;
+    text_archive >> mResultMode;
+    text_archive >> mHoldTime;
 
     UpdateChannels( true );
     UpdateInterfacesFromSettings();
@@ -216,6 +240,8 @@ const char* StepperMotorCoilsAnalyzerSettings::SaveSettings()
     text_archive << mInvert;
     text_archive << mStartAtZero;
     text_archive << mStepMarkers;
+    text_archive << mResultMode;
+    text_archive << mHoldTime;
 
     return SetReturnString( text_archive.GetString() );
 }

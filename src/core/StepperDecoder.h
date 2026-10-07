@@ -33,6 +33,7 @@ namespace stepper
         Position,  // energized, holding a quantized position
         Off,       // de-energized: the drive gives no position information
         Ambiguous, // the electrical angle jumped too far between windows to know which way it went
+        Move,      // a run of short position spans grouped into one move (MoveGrouper only)
     };
 
     // A span of samples [start, end) with one reported state.
@@ -41,7 +42,8 @@ namespace stepper
         SegmentType type = SegmentType::Off;
         uint64_t start = 0;
         uint64_t end = 0;
-        double position = 0;      // quantized, in full steps
+        double position = 0;      // quantized, in full steps; for a move, where it ended
+        double from_position = 0; // for a move, where it started
         double mean_position = 0; // unquantized mean over the span, in full steps
         double angle_degrees = 0; // electrical angle of the mean position, (-180, 180]
         double drive = 0;         // mean drive magnitude: 1 = one coil fully driven, sqrt(2) = both

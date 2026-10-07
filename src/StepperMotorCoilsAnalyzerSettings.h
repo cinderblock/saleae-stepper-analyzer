@@ -8,6 +8,12 @@
 
 #include <memory>
 
+enum class ResultMode : U32
+{
+    EveryChange = 0,   // one result per position change
+    MovesAndHolds = 1, // runs of quick changes grouped into one move
+};
+
 enum class PositionUnits : U32
 {
     FullSteps = 0,
@@ -36,6 +42,8 @@ class StepperMotorCoilsAnalyzerSettings : public AnalyzerSettings
     U32 mPwmMode;
     U32 mPwmFrequency;
     U32 mPeriodsPerWindow;
+    U32 mResultMode;
+    U32 mHoldTime;           // milliseconds; with MovesAndHolds, shorter positions are part of a move
     U32 mResolution;         // denominator: positions are reported in 1/mResolution full steps
     U32 mEnergizedThreshold; // percent of full drive on one coil
     U32 mUnits;
@@ -51,6 +59,8 @@ class StepperMotorCoilsAnalyzerSettings : public AnalyzerSettings
     std::unique_ptr<AnalyzerSettingInterfaceNumberList> mPwmModeInterface;
     std::unique_ptr<AnalyzerSettingInterfaceInteger> mPwmFrequencyInterface;
     std::unique_ptr<AnalyzerSettingInterfaceInteger> mPeriodsPerWindowInterface;
+    std::unique_ptr<AnalyzerSettingInterfaceNumberList> mResultModeInterface;
+    std::unique_ptr<AnalyzerSettingInterfaceInteger> mHoldTimeInterface;
     std::unique_ptr<AnalyzerSettingInterfaceNumberList> mResolutionInterface;
     std::unique_ptr<AnalyzerSettingInterfaceInteger> mEnergizedThresholdInterface;
     std::unique_ptr<AnalyzerSettingInterfaceNumberList> mUnitsInterface;

@@ -2,6 +2,7 @@
 
 #include <AnalyzerChannelData.h>
 
+#include "MoveGrouper.h"
 #include "StepperPipeline.h"
 
 #include <algorithm>
@@ -22,6 +23,8 @@ namespace
             return "off";
         case stepper::SegmentType::Ambiguous:
             return "ambiguous";
+        case stepper::SegmentType::Move:
+            return "move";
         }
         return "position";
     }
@@ -70,7 +73,13 @@ void StepperMotorCoilsAnalyzer::WorkerThread()
     stepper::StepperPipeline pipeline( mSettings.MakePipelineConfig( double( mSampleRateHz ) ) );
     pipeline.Start( start, initial );
 
+    // With moves and holds, quick successive positions are grouped before they become results.
+    std::unique_ptr<stepper::MoveGrouper> grouper;
+    if( ResultMode( mSettings.mResultMode ) == ResultMode::MovesAndHolds )
+        grouper.reset( new stepper::MoveGrouper( U64( double( mSettings.mHoldTime ) * 1e-3 * double( mSampleRateHz ) ) ) );
+
     std::vector<stepper::Segment> segments;
+    std::vector<stepper::Segment> grouped;
     U64 filled = start;
 
     for( ;; )
@@ -97,10 +106,19 @@ void StepperMotorCoilsAnalyzer::WorkerThread()
         segments.clear();
         pipeline.Process( segments );
 
-        for( const stepper::Segment& segment : segments )
+        const std::vector<stepper::Segment>* results = &segments;
+        if( grouper )
+        {
+            grouped.clear();
+            for( const stepper::Segment& segment : segments )
+                grouper->Add( segment, grouped );
+            results = &grouped;
+        }
+
+        for( const stepper::Segment& segment : *results )
             EmitSegment( segment );
 
-        if( !segments.empty() )
+        if( !results->empty() )
             mResults->CommitResults();
         ReportProgress( pipeline.Cursor() );
     }
@@ -125,15 +143,21 @@ void StepperMotorCoilsAnalyzer::EmitSegment( const stepper::Segment& segment )
         frame_v2.AddDouble( "electrical_angle", segment.angle_degrees );
     }
     frame_v2.AddDouble( "drive", std::round( segment.drive * 1000.0 ) / 10.0 );
-    if( segment.type == stepper::SegmentType::Position )
+    if( segment.type == stepper::SegmentType::Move )
+    {
+        frame_v2.AddDouble( "from", segment.from_position );
+        frame_v2.AddDouble( "delta", segment.delta );
+    }
+    if( segment.type == stepper::SegmentType::Position || segment.type == stepper::SegmentType::Move )
     {
         frame_v2.AddString( "direction", segment.direction > 0 ? "+" : ( segment.direction < 0 ? "-" : "" ) );
-        // Speed implied by the change that ended this span: the position moved by `delta` over its duration.
+        // For a position: the speed implied by the change that ended it. For a move: its mean speed.
         frame_v2.AddDouble( "rate", duration > 0 ? segment.delta / duration : 0 );
     }
     mResults->AddFrameV2( frame_v2, FrameTypeName( segment.type ), segment.start, segment.end - 1 );
 
     // Full-step markers: an arrow on A+ wherever the position crosses into a new whole step.
+    // (A move is a single result, so the steps inside it are not marked.)
     if( mSettings.mStepMarkers && segment.type == stepper::SegmentType::Position )
     {
         if( mHavePreviousPosition && std::floor( segment.position ) != std::floor( mPreviousPosition ) )

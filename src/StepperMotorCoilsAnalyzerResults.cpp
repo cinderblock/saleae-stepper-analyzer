@@ -56,7 +56,8 @@ Frame StepperMotorCoilsAnalyzerResults::EncodeFrame( const stepper::Segment& seg
     frame.mEndingSampleInclusive = S64( segment.end ) - 1;
     frame.mType = U8( segment.type );
     std::memcpy( &frame.mData1, &segment.position, sizeof( frame.mData1 ) );
-    frame.mData2 = ( U64( FloatBits( float( segment.angle_degrees ) ) ) << 32 ) | FloatBits( float( segment.drive ) );
+    const double high = segment.type == stepper::SegmentType::Move ? segment.from_position : segment.angle_degrees;
+    frame.mData2 = ( U64( FloatBits( float( high ) ) ) << 32 ) | FloatBits( float( segment.drive ) );
     frame.mFlags = 0;
     if( segment.direction > 0 )
         frame.mFlags |= FRAME_FLAG_POSITIVE;
@@ -116,6 +117,32 @@ void StepperMotorCoilsAnalyzerResults::GenerateBubbleText( U64 frame_index, Chan
         AddResultString( detail );
         break;
     }
+    case stepper::SegmentType::Move:
+    {
+        const Frame raw = GetFrame( frame_index );
+        const double seconds =
+            double( raw.mEndingSampleInclusive - raw.mStartingSampleInclusive + 1 ) / double( mAnalyzer->GetSampleRate() );
+        const double delta = frame.position - frame.angle;
+        char to[ 64 ];
+        char from[ 64 ];
+        char to_with_unit[ 80 ];
+        char delta_with_unit[ 80 ];
+        char text[ 240 ];
+        FormatPosition( frame.position, false, to, sizeof( to ) );
+        FormatPosition( frame.angle, false, from, sizeof( from ) );
+        FormatPosition( frame.position, true, to_with_unit, sizeof( to_with_unit ) );
+        FormatPosition( delta, true, delta_with_unit, sizeof( delta_with_unit ) );
+
+        AddResultString( to );
+        std::snprintf( text, sizeof( text ), "\xE2\x86\x92 %s", to_with_unit );
+        AddResultString( text );
+        std::snprintf( text, sizeof( text ), "Move %s \xE2\x86\x92 %s", from, to_with_unit );
+        AddResultString( text );
+        std::snprintf( text, sizeof( text ), "Move %s \xE2\x86\x92 %s (%s%s in %.3g s, %.4g steps/s)", from, to_with_unit,
+                       delta > 0 ? "+" : "", delta_with_unit, seconds, delta / seconds );
+        AddResultString( text );
+        break;
+    }
     case stepper::SegmentType::Off:
         AddResultString( "Off" );
         AddResultString( "De-energized" );
@@ -135,7 +162,8 @@ void StepperMotorCoilsAnalyzerResults::GenerateExportFile( const char* file, Dis
     const U64 trigger_sample = mAnalyzer->GetTriggerSample();
     const U32 sample_rate = mAnalyzer->GetSampleRate();
 
-    file_stream << "Time [s],Duration [s],Type,Position,Full steps,Electrical angle [deg],Drive [%],Direction" << std::endl;
+    file_stream << "Time [s],Duration [s],Type,Position,Full steps,From [full steps],Electrical angle [deg],Drive [%],Direction"
+                << std::endl;
 
     const U64 num_frames = GetNumFrames();
     for( U64 i = 0; i < num_frames; i++ )
@@ -154,15 +182,23 @@ void StepperMotorCoilsAnalyzerResults::GenerateExportFile( const char* file, Dis
         {
             char position[ 64 ];
             FormatPosition( frame.position, false, position, sizeof( position ) );
-            file_stream << "position," << position << "," << frame.position << "," << frame.angle << "," << frame.drive * 100.0 << ","
+            file_stream << "position," << position << "," << frame.position << ",," << frame.angle << "," << frame.drive * 100.0 << ","
+                        << ( frame.direction > 0 ? "+" : ( frame.direction < 0 ? "-" : "" ) );
+            break;
+        }
+        case stepper::SegmentType::Move:
+        {
+            char position[ 64 ];
+            FormatPosition( frame.position, false, position, sizeof( position ) );
+            file_stream << "move," << position << "," << frame.position << "," << frame.angle << ",," << frame.drive * 100.0 << ","
                         << ( frame.direction > 0 ? "+" : ( frame.direction < 0 ? "-" : "" ) );
             break;
         }
         case stepper::SegmentType::Off:
-            file_stream << "off,,,," << frame.drive * 100.0 << ",";
+            file_stream << "off,,,,," << frame.drive * 100.0 << ",";
             break;
         case stepper::SegmentType::Ambiguous:
-            file_stream << "ambiguous,,," << frame.angle << "," << frame.drive * 100.0 << ",";
+            file_stream << "ambiguous,,,," << frame.angle << "," << frame.drive * 100.0 << ",";
             break;
         }
         file_stream << std::endl;
@@ -190,6 +226,15 @@ void StepperMotorCoilsAnalyzerResults::GenerateFrameTabularText( U64 frame_index
         char with_unit[ 80 ];
         FormatPosition( frame.position, true, with_unit, sizeof( with_unit ) );
         AddTabularText( with_unit );
+        break;
+    }
+    case stepper::SegmentType::Move:
+    {
+        char from[ 64 ];
+        char to[ 80 ];
+        FormatPosition( frame.angle, false, from, sizeof( from ) );
+        FormatPosition( frame.position, true, to, sizeof( to ) );
+        AddTabularText( "Move ", from, " \xE2\x86\x92 ", to );
         break;
     }
     case stepper::SegmentType::Off:
