@@ -41,10 +41,13 @@ Copy-Item $dll $stage -Force
 $configPath = Join-Path $profileDir 'config.json'
 if (-not (Test-Path $configPath)) {
     $userConfig = Join-Path $env:APPDATA 'Logic\config.json'
-    $settings = if (Test-Path $userConfig) { Get-Content $userConfig -Raw | ConvertFrom-Json } else { [pscustomobject]@{} }
-    $settings | Add-Member -Force NotePropertyName customAnalyzerPaths -NotePropertyValue @($stage)
-    $settings | Add-Member -Force NotePropertyName automationServerEnabled -NotePropertyValue $true
-    $settings | ConvertTo-Json -Depth 64 | Set-Content $configPath -Encoding utf8
+    $json = if (Test-Path $userConfig) { Get-Content $userConfig -Raw } else { '{}' }
+    $settings = [System.Text.Json.Nodes.JsonNode]::Parse($json)
+    $paths = [System.Text.Json.Nodes.JsonArray]::new()
+    $paths.Add([System.Text.Json.Nodes.JsonNode]$stage)
+    $settings['customAnalyzerPaths'] = $paths
+    $settings['automationServerEnabled'] = [System.Text.Json.Nodes.JsonNode]$true
+    Set-Content $configPath $settings.ToJsonString() -Encoding utf8NoBOM
 }
 
 # Tools that are themselves Electron apps can leave ELECTRON_RUN_AS_NODE set, which makes
