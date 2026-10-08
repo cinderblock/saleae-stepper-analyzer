@@ -92,6 +92,14 @@ namespace stepper
         mDecoder.Flush( out );
     }
 
+    void StepperPipeline::Checkpoint( std::vector<Segment>& out )
+    {
+        while( DecodeOneWindow( true, out ) )
+        {
+        }
+        mDecoder.Checkpoint( out );
+    }
+
     bool StepperPipeline::DecodeOneWindow( bool finishing, std::vector<Segment>& out )
     {
         const double window = CurrentWindow();

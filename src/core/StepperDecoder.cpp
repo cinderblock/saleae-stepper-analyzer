@@ -187,6 +187,18 @@ namespace stepper
             Close( mLastEnd, 0, out );
     }
 
+    void StepperDecoder::Checkpoint( std::vector<Segment>& out )
+    {
+        FlushPending( out );
+        if( !mHaveOpen || mLastEnd <= mOpen.start )
+            return;
+        const SegmentType type = mOpen.type;
+        const double position = mOpen.position;
+        Close( mLastEnd, 0, out );
+        Open( type, mLastEnd, position );
+        mOpen.continuation = true;
+    }
+
     void StepperDecoder::Open( SegmentType type, uint64_t start, double position )
     {
         mOpen = Segment();

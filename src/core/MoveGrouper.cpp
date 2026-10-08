@@ -8,7 +8,9 @@ namespace stepper
 
     void MoveGrouper::Add( const Segment& segment, std::vector<Segment>& out )
     {
-        const bool short_position = segment.type == SegmentType::Position && segment.end - segment.start < mHoldSamples;
+        // A continuation (the decoder was checkpointed mid-span) carries on the hold before it.
+        const bool short_position =
+            segment.type == SegmentType::Position && segment.end - segment.start < mHoldSamples && !( segment.continuation && !mInMove );
 
         if( !short_position )
         {
@@ -48,6 +50,16 @@ namespace stepper
         mMoveSamples += width;
         mLastPosition = segment.position;
         ++mMoveCount;
+    }
+
+    void MoveGrouper::Tick( uint64_t now, bool has_open, const Segment& open, std::vector<Segment>& out )
+    {
+        if( !mInMove || !has_open || now < open.start )
+            return;
+        if( open.type == SegmentType::Position && now - open.start >= mHoldSamples )
+            EndMove( open.position, out );
+        else if( open.type != SegmentType::Position )
+            EndMove( mLastPosition, out );
     }
 
     void MoveGrouper::Flush( std::vector<Segment>& out )

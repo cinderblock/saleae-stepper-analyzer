@@ -25,6 +25,11 @@ namespace stepper
         // Emit whatever is still buffered (end of data).
         void Flush( std::vector<Segment>& out );
 
+        // Decoding has reached `now`, and `open` (when `has_open`) is the segment the decoder is in
+        // but has not emitted yet. A move in progress ends as soon as that is a position held for the
+        // hold time, or the motor is off, rather than when the hold eventually ends.
+        void Tick( uint64_t now, bool has_open, const Segment& open, std::vector<Segment>& out );
+
       private:
         void EndMove( double to, std::vector<Segment>& out );
 

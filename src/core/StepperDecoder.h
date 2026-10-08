@@ -42,13 +42,14 @@ namespace stepper
         SegmentType type = SegmentType::Off;
         uint64_t start = 0;
         uint64_t end = 0;
-        double position = 0;      // quantized, in full steps; for a move, where it ended
-        double from_position = 0; // for a move, where it started
-        double mean_position = 0; // unquantized mean over the span, in full steps
-        double angle_degrees = 0; // electrical angle of the mean position, (-180, 180]
-        double drive = 0;         // mean drive magnitude: 1 = one coil fully driven, sqrt(2) = both
-        double delta = 0;         // quantized position change that ended the span, in full steps
-        int direction = 0;        // sign of `delta`
+        double position = 0;       // quantized, in full steps; for a move, where it ended
+        double from_position = 0;  // for a move, where it started
+        double mean_position = 0;  // unquantized mean over the span, in full steps
+        double angle_degrees = 0;  // electrical angle of the mean position, (-180, 180]
+        double drive = 0;          // mean drive magnitude: 1 = one coil fully driven, sqrt(2) = both
+        double delta = 0;          // quantized position change that ended the span, in full steps
+        int direction = 0;         // sign of `delta`
+        bool continuation = false; // the span continues one cut short by Checkpoint() (nothing changed)
     };
 
     // Turns per-window terminal duty cycles into motor position segments.
@@ -67,6 +68,20 @@ namespace stepper
 
         // Close the open segment at the end of the last window, appending it to `out`.
         void Flush( std::vector<Segment>& out );
+
+        // Close the open segment at the end of the last window, as if the data ended there, and
+        // carry on in the same state. The next segment is marked as a continuation.
+        void Checkpoint( std::vector<Segment>& out );
+
+        // The segment the decoder is in now, not yet emitted.
+        bool HasOpen() const
+        {
+            return mHaveOpen;
+        }
+        const Segment& OpenSegment() const
+        {
+            return mOpen;
+        }
 
         // Electrical angle in degrees of a coil drive vector.
         static double AngleDegrees( double a, double b );

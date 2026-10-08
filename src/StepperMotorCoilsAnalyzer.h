@@ -6,9 +6,13 @@
 #include "StepperMotorCoilsAnalyzerSettings.h"
 #include "StepperMotorCoilsAnalyzerResults.h"
 #include "StepperMotorCoilsSimulationDataGenerator.h"
+#include "IdleFlusher.h"
+#include "MoveGrouper.h"
 #include "StepperDecoder.h"
+#include "StepperPipeline.h"
 
 #include <memory>
+#include <vector>
 
 class ANALYZER_EXPORT StepperMotorCoilsAnalyzer : public Analyzer2
 {
@@ -27,6 +31,8 @@ class ANALYZER_EXPORT StepperMotorCoilsAnalyzer : public Analyzer2
 
   protected:
     void EmitSegment( const stepper::Segment& segment );
+    void EmitResults( bool flush );
+    void FlushOpen();
 
     StepperMotorCoilsAnalyzerSettings mSettings;
     std::unique_ptr<StepperMotorCoilsAnalyzerResults> mResults;
@@ -37,6 +43,14 @@ class ANALYZER_EXPORT StepperMotorCoilsAnalyzer : public Analyzer2
     U32 mSampleRateHz;
     bool mHavePreviousPosition;
     double mPreviousPosition;
+
+    // Decoding state. Members rather than worker locals because the flusher thread uses them too,
+    // always under mFlusher.Lock().
+    IdleFlusher mFlusher;
+    std::unique_ptr<stepper::StepperPipeline> mPipeline;
+    std::unique_ptr<stepper::MoveGrouper> mGrouper;
+    std::vector<stepper::Segment> mSegments;
+    std::vector<stepper::Segment> mGrouped;
 };
 
 extern "C" ANALYZER_EXPORT const char* __cdecl GetAnalyzerName();

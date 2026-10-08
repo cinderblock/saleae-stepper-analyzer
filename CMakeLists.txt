@@ -36,6 +36,7 @@ target_include_directories(stepper_core PUBLIC src/core)
 set_target_properties(stepper_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 set(SOURCES
+src/IdleFlusher.h
 src/StepperMotorCoilsAnalyzer.cpp
 src/StepperMotorCoilsAnalyzer.h
 src/StepperMotorCoilsAnalyzerResults.cpp

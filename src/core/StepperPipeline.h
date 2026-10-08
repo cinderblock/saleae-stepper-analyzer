@@ -61,6 +61,15 @@ namespace stepper
         // End of data: decode up to the filled mark without waiting for lookahead, then flush.
         void Finish( std::vector<Segment>& out );
 
+        // Decode up to the filled mark without waiting for lookahead and close the open segment
+        // there, then carry on: shows the current state while waiting for more data.
+        void Checkpoint( std::vector<Segment>& out );
+
+        const StepperDecoder& Decoder() const
+        {
+            return mDecoder;
+        }
+
         uint64_t Cursor() const
         {
             return mCursor;

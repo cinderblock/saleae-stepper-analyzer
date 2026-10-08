@@ -312,6 +312,84 @@ TEST_CASE( "MoveGrouper groups quick position changes into moves between holds" 
     CHECK( out[ 5 ].end == 20100 );
 }
 
+TEST_CASE( "StepperDecoder checkpoints show the open segment and continue it" )
+{
+    DecoderConfig config;
+    config.resolution = 0.5;
+    StepperDecoder decoder( config );
+    std::vector<Segment> out;
+    double duty[ TERMINAL_COUNT ];
+
+    DutiesFor( 0, 1, duty );
+    decoder.AddWindow( 0, 100, duty, out );
+    decoder.AddWindow( 100, 200, duty, out );
+    decoder.Checkpoint( out ); // waiting for data: show position 0 up to 200
+    REQUIRE( out.size() == 1 );
+    CHECK( out[ 0 ].end == 200 );
+    CHECK_FALSE( out[ 0 ].continuation );
+    REQUIRE( decoder.HasOpen() );
+    CHECK( decoder.OpenSegment().continuation );
+
+    decoder.AddWindow( 200, 300, duty, out );
+    DutiesFor( 90, 1, duty );
+    decoder.AddWindow( 300, 400, duty, out );
+    decoder.Flush( out );
+    REQUIRE( out.size() == 3 );
+    CHECK( out[ 1 ].start == 200 );
+    CHECK( out[ 1 ].end == 300 );
+    CHECK( out[ 1 ].position == doctest::Approx( 0 ) );
+    CHECK( out[ 1 ].continuation );
+    CHECK_FALSE( out[ 2 ].continuation );
+    CHECK( out[ 2 ].position == doctest::Approx( 1 ) );
+}
+
+TEST_CASE( "MoveGrouper ends a move once the position has held, or the motor is off" )
+{
+    auto position = []( uint64_t start, uint64_t end, double steps )
+    {
+        Segment segment;
+        segment.type = SegmentType::Position;
+        segment.start = start;
+        segment.end = end;
+        segment.position = steps;
+        return segment;
+    };
+
+    SUBCASE( "held position" )
+    {
+        MoveGrouper grouper( 100 );
+        std::vector<Segment> out;
+        grouper.Add( position( 0, 1000, 0 ), out );
+        grouper.Add( position( 1000, 1010, 1 ), out );
+        grouper.Tick( 1050, true, position( 1010, 1050, 2 ), out );
+        CHECK( out.size() == 1 );
+        grouper.Tick( 1110, true, position( 1010, 1110, 2 ), out );
+        REQUIRE( out.size() == 2 );
+        CHECK( out[ 1 ].type == SegmentType::Move );
+        CHECK( out[ 1 ].from_position == doctest::Approx( 0 ) );
+        CHECK( out[ 1 ].position == doctest::Approx( 2 ) );
+        CHECK( out[ 1 ].end == 1010 );
+
+        grouper.Add( position( 1010, 5000, 2 ), out ); // the hold, when it ends
+        REQUIRE( out.size() == 3 );
+        CHECK( out[ 2 ].type == SegmentType::Position );
+    }
+
+    SUBCASE( "motor switched off" )
+    {
+        MoveGrouper grouper( 100 );
+        std::vector<Segment> out;
+        grouper.Add( position( 0, 1000, 0 ), out );
+        grouper.Add( position( 1000, 1010, 1 ), out );
+        Segment off;
+        off.type = SegmentType::Off;
+        off.start = 1010;
+        grouper.Tick( 1020, true, off, out );
+        REQUIRE( out.size() == 2 );
+        CHECK( out[ 1 ].position == doctest::Approx( 1 ) );
+    }
+}
+
 TEST_CASE( "Pipeline decodes the synthetic program to the commanded positions" )
 {
     struct Case

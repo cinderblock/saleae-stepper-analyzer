@@ -53,6 +53,16 @@ The analyzer's export option writes the same data as CSV.
 
 A fast move is hundreds of narrow frames. When they're too narrow to label, Logic packs the labels side by side instead of placing each one at its frame, so the numbers you see are not where they happened. Use *Moves and holds*, or zoom in, to read moves. You can add the analyzer twice to get both rows.
 
+### The last result of a capture
+
+The Analyzer SDK never tells an analyzer that a capture has ended; reading past the last sample just waits. So the final position (often a long hold, or *off* after power-down) would never close as a result. When the analyzer has been waiting for data for a moment, it emits the open result up to the data read so far.
+
+The bubbles therefore always show the final state. Logic's data table and export, however, are finalized within milliseconds of the analyzer reaching the end, so the last row is often missing there.
+
+During a live capture, pauses in the incoming data can split a long hold into a few results with the same position. The wait before splitting starts at 100 ms and backs off to 2 s while the hold continues.
+
+Some captures give analyzers digital data past their visible end. In one saved by Logic 2.4.46, it continued to about 280 s in a 37.9 s capture; the final result then extends past the end too.
+
 ## Settings
 
 | Setting | Default | Notes |
@@ -111,6 +121,7 @@ ctest --test-dir build
   - `MoveGrouper`: the *Moves and holds* grouping;
   - `StepperWaveform`: a synthetic test program, also used by Logic's demo device.
 - **`tests/core_tests.cpp`:** doctest unit tests. These include decoding the synthetic program at several sample rates and PWM frequencies.
+- **`src/IdleFlusher.h`:** emits the open result while the analyzer waits for data (see above).
 - **`tests/simulation_tests.cpp`:** runs the simulation data generator against the real Analyzer SDK library, the way Logic's demo device calls it. Logic only plays an analyzer's simulation when the analyzer was added in the UI before capturing, so the automation API can't test it.
 - **`tools/replay_csv.cpp`:** replays a Logic digital CSV export (*File → Export Data → CSV*) through the decoder:
 
