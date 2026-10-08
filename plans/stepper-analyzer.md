@@ -137,14 +137,18 @@ FrameV2 fields as implemented (see the README for the full table):
 - [x] README, and CI runs the tests (`83ef0e2`).
 - [x] Simulation generator fixed and tested against the SDK library (`323e25a`).
 - [x] Final DLL re-verified in an isolated Logic on `Session 0.sal` (both modes); test instance stopped.
-- [ ] Publish: no GitHub remote yet (needs the user's go-ahead).
+- [x] Published to https://github.com/cinderblock/saleae-stepper-analyzer (public, user approved 2026-10-07). CI: Linux x86_64/arm64, macOS and Windows arm64 green on the first push.
+- [x] Installed into everyday Logic (user approved 2026-10-07; user closed Logic themselves after the "Save Protected Capture" prompt).
+  - `tools/install.ps1 -Register` (`6e003a1`): the DLL is in `%LOCALAPPDATA%\Saleae Logic Analyzers\StepperMotorCoils`, registered alongside the existing async-rgb-led path, with every other config value unchanged (formatting re-indented).
+  - Backup at `%APPDATA%\Logic\config.json.before-stepper-install`.
+  - Relaunched through `explorer.exe`. Verified the analyzer runs (demo-device capture via automation port 10430) and the Pro 16 reconnected.
+- [x] CI: the first run hung on Windows x86_64 (simulation test couldn't find `Analyzer.dll` under the VS generator's `bin/Release`, and Windows' "DLL not found" box blocked). Cancelled; fixed in `a931d3d` (copy the DLL post-build, 120 s test timeouts).
 - [ ] Optional manual check: demo device in the Logic UI. Add the analyzer before capturing so Logic plays its simulation.
-- [ ] Install into the user's everyday Logic: add `build/release/Analyzers` (or a copy) to *Custom Low Level Analyzers*, which needs a Logic restart. The user's call.
 
 ## Open questions for the user
 
-1. Publish to GitHub (for example `cinderblock/saleae-stepper-analyzer`, public) and let CI build all platforms? Recommended.
-2. Should I add the analyzer to your everyday Logic's custom analyzer path? That needs your Logic restarted, so it's your call when.
+1. ~~Publish?~~ Yes, done.
+2. ~~Install into everyday Logic?~~ Yes, done.
 
 ## Things not to do
 
