@@ -143,6 +143,8 @@ FrameV2 fields as implemented (see the README for the full table):
   - Backup at `%APPDATA%\Logic\config.json.before-stepper-install`.
   - Relaunched through `explorer.exe`. Verified the analyzer runs (demo-device capture via automation port 10430) and the Pro 16 reconnected.
 - [x] CI: the first run hung on Windows x86_64 (simulation test couldn't find `Analyzer.dll` under the VS generator's `bin/Release`, and Windows' "DLL not found" box blocked). Cancelled; fixed in `a931d3d` (copy the DLL post-build, 120 s test timeouts).
+- [x] End-of-capture handling (found while building the quadrature analyzer; see `../quadrature-analyzer/plans/quadrature-analyzer.md` Findings): `IdleFlusher` + pipeline `Checkpoint` + `MoveGrouper::Tick` + continuation flag (`23efce3`, pushed, CI green). The stepper capture's final off span now shows (it runs to about 280 s because Logic serves data past that capture's visible 37.9 s end).
+- [ ] The everyday Logic still has the older install (`60cb907`). Updating needs Logic closed, then `tools/install.ps1`.
 - [ ] Optional manual check: demo device in the Logic UI. Add the analyzer before capturing so Logic plays its simulation.
 
 ## Open questions for the user
