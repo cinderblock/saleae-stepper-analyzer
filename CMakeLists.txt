@@ -69,6 +69,7 @@ if(STEPPER_BUILD_TESTS)
     target_include_directories(stepper_core_tests PRIVATE ${doctest_SOURCE_DIR})
     target_link_libraries(stepper_core_tests PRIVATE stepper_core)
     add_test(NAME stepper_core_tests COMMAND stepper_core_tests)
+    set_tests_properties(stepper_core_tests PROPERTIES TIMEOUT 120)
 
     # Runs the simulation data generator against the real Analyzer SDK library. The Linux SDK
     # library is built against libc++, so linking an executable to it with GCC's libstdc++ fails;
@@ -81,7 +82,14 @@ if(STEPPER_BUILD_TESTS)
         )
         target_include_directories(stepper_simulation_tests PRIVATE src ${doctest_SOURCE_DIR})
         target_link_libraries(stepper_simulation_tests PRIVATE stepper_core Saleae::AnalyzerSDK)
+        if(WIN32)
+            # Multi-config generators put the executable in a per-config folder, away from the copy
+            # of the SDK DLL; without it Windows shows a "DLL not found" box and the test hangs.
+            add_custom_command(TARGET stepper_simulation_tests POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:Saleae::AnalyzerSDK> $<TARGET_FILE_DIR:stepper_simulation_tests>)
+        endif()
         add_test(NAME stepper_simulation_tests COMMAND stepper_simulation_tests)
+        set_tests_properties(stepper_simulation_tests PROPERTIES TIMEOUT 120)
     endif()
 
     # Replays a Logic 2 digital CSV export through the decoder.
