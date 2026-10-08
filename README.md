@@ -77,6 +77,10 @@ A fast move is hundreds of narrow frames. When they're too narrow to label, Logi
 2. In Logic 2, open *Preferences → Custom Low Level Analyzers* and point it at the folder holding `StepperMotorCoilsAnalyzer.dll` (`.so` on macOS and Linux).
 3. Restart Logic. *Stepper Motor Coils* appears in the analyzer list.
 
+On Windows, after building, `./tools/install.ps1` copies the DLL to `%LOCALAPPDATA%\Saleae Logic Analyzers\StepperMotorCoils`. Logic locks the DLL it has loaded, so this keeps rebuilds possible while Logic is open. Close Logic before reinstalling over a loaded copy.
+
+With Logic closed, `./tools/install.ps1 -Register` also adds that folder to Logic's custom analyzer paths. It leaves the rest of Logic's settings untouched and keeps a backup of them.
+
 ## Building
 
 The build uses CMake and fetches the [Saleae Analyzer SDK](https://github.com/saleae/AnalyzerSDK) automatically.
